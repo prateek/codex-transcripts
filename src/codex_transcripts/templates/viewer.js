@@ -403,19 +403,79 @@
       var x = Math.floor(i * scaleX);
       var barW = Math.max(1, Math.ceil(scaleX));
       var y = h;
-      function drawPart(count, color) {
-        if (!count) return;
-        var ph = Math.max(1, Math.round((count / total) * h));
-        y -= ph;
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, barW, ph);
+
+      // Use sqrt-scaling per bin to reduce domination by a single kind and make
+      // sparse kinds more visible in the minimap.
+      var parts = [
+        { count: b.s, color: colors.s },
+        { count: b.r, color: colors.r },
+        { count: b.t, color: colors.t },
+        { count: b.a, color: colors.a },
+        { count: b.u, color: colors.u }
+      ];
+      var weights = new Array(parts.length);
+      var weightSum = 0;
+      for (var p = 0; p < parts.length; p++) {
+        var c = parts[p].count | 0;
+        var wgt = c > 0 ? Math.sqrt(c) : 0;
+        weights[p] = wgt;
+        weightSum += wgt;
+      }
+      if (weightSum <= 0) continue;
+
+      var heights = new Array(parts.length);
+      var used = 0;
+      var raw = new Array(parts.length);
+      for (var q = 0; q < parts.length; q++) {
+        var wq = weights[q];
+        if (wq <= 0) { heights[q] = 0; raw[q] = 0; continue; }
+        var rq = (wq / weightSum) * h;
+        raw[q] = rq;
+        var ih = Math.floor(rq);
+        if (ih < 1) ih = 1;
+        heights[q] = ih;
+        used += ih;
       }
 
-      drawPart(b.s, colors.s);
-      drawPart(b.r, colors.r);
-      drawPart(b.t, colors.t);
-      drawPart(b.a, colors.a);
-      drawPart(b.u, colors.u);
+      // If min-heights pushed us over, shave pixels from the largest segments.
+      while (used > h) {
+        var best = -1;
+        var bestH = 0;
+        for (var r = 0; r < heights.length; r++) {
+          var hr = heights[r];
+          if (hr > 1 && hr > bestH) { bestH = hr; best = r; }
+        }
+        if (best < 0) break;
+        heights[best] -= 1;
+        used -= 1;
+      }
+
+      // Distribute remaining pixels to largest fractional remainders.
+      if (used < h) {
+        var fracs = [];
+        for (var s = 0; s < heights.length; s++) {
+          if (heights[s] <= 0) continue;
+          var frac = raw[s] - Math.floor(raw[s]);
+          fracs.push({ i: s, frac: frac });
+        }
+        fracs.sort(function(a, b) { return b.frac - a.frac; });
+        var k = 0;
+        while (used < h && fracs.length) {
+          heights[fracs[k % fracs.length].i] += 1;
+          used += 1;
+          k += 1;
+        }
+      }
+
+      for (var t = 0; t < parts.length; t++) {
+        var ph = heights[t] | 0;
+        if (ph <= 0) continue;
+        y -= ph;
+        if (y < 0) { ph += y; y = 0; }
+        if (ph <= 0) break;
+        ctx.fillStyle = parts[t].color;
+        ctx.fillRect(x, y, barW, ph);
+      }
     }
 
     if (typeof activeIndex === 'number' && meta.total > 0) {

@@ -15,7 +15,7 @@
             </div>
         </div>
 
-        <p class="viewer-summary">{{ total_groups }} conversations · {{ total_messages }} messages</p>
+        <p class="viewer-summary">{{ total_groups }} conversations · {{ total_messages }} messages{% if task_time_summary %} · ⏱ {{ task_time_summary }}{% endif %}</p>
 
         {{ warnings_html|safe }}
 
@@ -39,7 +39,7 @@
                     </div>
                     <div class="index-item-content conversation-prompt">{{ g.prompt_html | safe }}</div>
                     <div class="index-item-stats">
-                        <div class="conversation-stats-line conversation-tool-stats">{% if g.tool_stats %}{{ g.tool_stats }} · {% endif %}Δ {{ g.duration_label }}{% if g.commit_count %} · {{ g.commit_count }} commits{% endif %}</div>
+                        <div class="conversation-stats-line conversation-tool-stats">{% if g.tool_stats %}{{ g.tool_stats }} · {% endif %}⏱ {{ g.duration_label }}{% if g.commit_count %} · {{ g.commit_count }} commits{% endif %}</div>
                         {{ g.long_texts_html | safe }}
                     </div>
                 </summary>

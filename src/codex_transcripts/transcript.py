@@ -311,6 +311,20 @@ def generate_html_from_session_data(
             }
         )
 
+    task_duration_ms: list[int] = [
+        int(g["duration_ms"])
+        for g in rendered_groups
+        if g.get("prompt_raw") is not None and isinstance(g.get("duration_ms"), int)
+    ]
+    task_time_summary = ""
+    if task_duration_ms:
+        total_ms = sum(task_duration_ms)
+        avg_ms = int(total_ms / len(task_duration_ms))
+        task_time_summary = (
+            f"task time avg {_format_duration_ms(avg_ms)} · min {_format_duration_ms(min(task_duration_ms))} · "
+            f"max {_format_duration_ms(max(task_duration_ms))}"
+        )
+
     kind_to_char = {"user": "u", "assistant": "a", "tool_call": "t", "tool_reply": "r", "system": "s"}
     kinds_compact = "".join(kind_to_char.get(k, "s") for k in transcript_item_kinds)
 
@@ -334,6 +348,7 @@ def generate_html_from_session_data(
         groups=rendered_groups,
         total_messages=len(transcript_items_html),
         total_groups=len(rendered_groups),
+        task_time_summary=task_time_summary,
     )
     (output_dir / "index.html").write_text(index_content, encoding="utf-8")
 
