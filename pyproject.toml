@@ -1,0 +1,36 @@
+[project]
+name = "codex-transcripts"
+version = "0.1"
+description = "Convert Codex session rollout files to HTML transcripts"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "OpenAI" }]
+requires-python = ">=3.10"
+dependencies = [
+    "click",
+    "click-default-group",
+    "httpx",
+    "jinja2",
+    "markdown",
+    "questionary",
+    "textual>=0.50.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/openai/codex/"
+
+[project.scripts]
+codex-transcripts = "codex_transcripts.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["references", ".venv"]

@@ -1,0 +1,14 @@
+# Cloned reference repositories (keep out of commits)
+references/repos/
+
+# Local virtualenv + caches
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Packaging output
+dist/
+build/
+
+# OS / editor noise
+.DS_Store

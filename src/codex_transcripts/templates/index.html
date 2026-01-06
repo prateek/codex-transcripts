@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Codex transcript{% endblock %}
+
+{% block content %}
+        <div class="header-row">
+            <h1>Codex transcript</h1>
+            <div class="header-controls">
+                <input type="text" id="search-input" placeholder="Search..." aria-label="Search transcripts">
+                <button id="search-btn" class="control-btn" type="button" aria-label="Search" title="Search">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                </button>
+                <button id="kb-help-btn" class="control-btn" type="button" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+                {% include "theme_toggle.html" %}
+            </div>
+        </div>
+
+        <p class="viewer-summary">{{ total_groups }} conversations · {{ total_messages }} messages</p>
+
+        {{ warnings_html|safe }}
+
+        <div class="minimap-wrap minimap-large">
+            <canvas id="minimap" height="64" aria-label="Transcript timeline" role="img"></canvas>
+            <div id="minimap-brush" class="minimap-brush" aria-hidden="true">
+                <div id="minimap-selection" class="minimap-selection"></div>
+                <div id="minimap-handle-left" class="minimap-handle left" title="Drag to select range"></div>
+                <div id="minimap-handle-right" class="minimap-handle right" title="Drag to select range"></div>
+            </div>
+            <div id="minimap-tooltip" class="minimap-tooltip" role="status" aria-live="polite"></div>
+        </div>
+
+        <div id="conversations" class="conversations">
+        {% for g in groups %}
+            <details class="conversation index-item" data-group-index="{{ g.group_index }}" data-start="{{ g.start }}" data-end="{{ g.end }}">
+                <summary class="conversation-summary" data-preview="{{ g.prompt_plain | e }}" title="{{ g.message_count }} messages · {{ g.tool_calls }} tool calls{% if g.commit_count %} · {{ g.commit_count }} commits{% endif %}">
+                    <div class="index-item-header">
+                        <span class="index-item-number">{{ g.display_label }}</span>
+                        <time datetime="{{ g.start_ts }}" data-timestamp="{{ g.start_ts }}">{{ g.start_ts }}</time>
+                    </div>
+                    <div class="index-item-content conversation-prompt">{{ g.prompt_html | safe }}</div>
+                    <div class="index-item-stats">
+                        <div class="conversation-stats-line conversation-tool-stats">{% if g.tool_stats %}{{ g.tool_stats }} · {% endif %}Δ {{ g.duration_label }}{% if g.commit_count %} · {{ g.commit_count }} commits{% endif %}</div>
+                        {{ g.long_texts_html | safe }}
+                    </div>
+                </summary>
+                <div class="conversation-body">
+                    <div class="conversation-messages" id="group-{{ g.group_index }}"></div>
+                </div>
+            </details>
+        {% endfor %}
+        </div>
+
+        <dialog id="search-modal">
+            <div class="search-modal-header">
+                <input type="text" id="modal-search-input" placeholder="Search..." aria-label="Search transcripts">
+                <button id="modal-search-btn" type="button" aria-label="Search">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                </button>
+                <button id="modal-close-btn" type="button" aria-label="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </button>
+            </div>
+            <div id="search-status"></div>
+            <div id="search-results"></div>
+        </dialog>
+
+        <dialog id="kb-help" class="kb-help">
+            <div class="kb-help-header">
+                <div class="kb-help-title">Keyboard shortcuts</div>
+                <button id="kb-help-close" class="control-btn" type="button" aria-label="Close">×</button>
+            </div>
+            <div class="kb-help-body">
+                <div class="kb-help-hint">Press <code>Esc</code> to close.</div>
+                <pre class="kb-help-pre">
+Navigation
+  n / p         next / previous message
+  ]a / [a       next / previous assistant message
+  ]u / [u       next / previous user message
+  ]t / [t       next / previous tool call message
+  ]r / [r       next / previous tool reply message
+  ]s / [s       next / previous system message
+  g / G         first / last message
+
+UI
+  ?             toggle this help
+                </pre>
+            </div>
+        </dialog>
+
+        <script>
+window.__CODEX_TRANSCRIPTS_META__ = {{ meta_json|safe }};
+        </script>
+        <script>
+{% include "viewer.js" %}
+        </script>
+{%- endblock %}

@@ -1,0 +1,10 @@
+{"timestamp":"2026-01-05T12:00:00.000Z","type":"session_meta","payload":{"id":"00000000-0000-0000-0000-000000000001","timestamp":"2026-01-05T12:00:00.000Z","cwd":"/Users/prateek/code/openai","originator":"cli","cli_version":"0.9.0","instructions":null,"source":"cli","model_provider":"openai","git":{"commit_hash":"deadbeef","branch":"main","repository_url":"https://github.com/openai/codex.git"}}}
+{"timestamp":"2026-01-05T12:00:00.500Z","type":"turn_context","payload":{"cwd":"/Users/prateek/code/openai","approval_policy":"never","sandbox_policy":{"type":"danger-full-access"}}}
+{"timestamp":"2026-01-05T12:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"Hello Codex"}}
+{"timestamp":"2026-01-05T12:00:02.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Hi! I can help."}}
+{"timestamp":"2026-01-05T12:00:02.500Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}}}
+{"timestamp":"2026-01-05T12:00:02.600Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"(internal)"}}
+{"timestamp":"2026-01-05T12:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"functions.exec_command","arguments":"{\"cmd\":\"echo hi\"}","call_id":"call_1"}}
+{"timestamp":"2026-01-05T12:00:04.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"hi\\n"}}
+{"timestamp":"2026-01-05T12:00:04.500Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"(internal)"}],"content":null}}
+{"timestamp":"2026-01-05T12:00:05.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done."}}

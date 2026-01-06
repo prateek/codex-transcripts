@@ -1,0 +1,5 @@
+{"timestamp":"2026-01-05T12:00:00.000Z","type":"session_meta","payload":{"id":"00000000-0000-0000-0000-000000000004","timestamp":"2026-01-05T12:00:00.000Z","cwd":"/tmp","originator":"cli","cli_version":"0.9.0","instructions":null,"source":"cli","model_provider":"openai"}}
+{"timestamp":"2026-01-05T12:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"Hello Codex"}}
+{"timestamp":"2026-01-05T12:00:02.000Z","type":"event_msg","payload":{"type":"context_compacted"}}
+{"timestamp":"2026-01-05T12:00:03.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Hi! I can help."}}
+{"timestamp":"2026-01-05T12:00:04.000Z","type":"event_msg","payload":{"type":"turn_aborted","reason":"interrupted"}}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Codex transcript - Archive{% endblock %}
+
+{% block content %}
+        <div class="header-row">
+            <h1>Codex transcript archive</h1>
+            <div id="search-box">
+                <input type="text" id="search-input" placeholder="Filter..." aria-label="Filter transcripts">
+                <button id="search-btn" type="button" aria-label="Filter">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                </button>
+                {% include "theme_toggle.html" %}
+            </div>
+        </div>
+
+        <p style="color: var(--text-muted); margin-bottom: 24px;">{{ total_sessions }} sessions</p>
+
+        <div id="sessions">
+        {% for s in sessions %}
+        <div class="index-item" data-preview="{{ s.preview | e }}">
+            <a href="{{ s.href }}">
+                <div class="index-item-header">
+                    <span class="index-item-number">{{ s.updated }}</span>
+                    <span style="color: var(--text-muted); font-family: monospace;">{{ s.session_id }}</span>
+                </div>
+                <div class="index-item-content">
+                    <p style="margin: 0;">{{ s.preview }}</p>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+        </div>
+
+        <script>
+        (function() {
+          function normalize(s) { return (s || '').toLowerCase(); }
+          function applyFilter(q) {
+            var needle = normalize(q);
+            document.querySelectorAll('#sessions .index-item').forEach(function(item) {
+              var text = normalize(item.getAttribute('data-preview'));
+              item.style.display = (!needle || text.indexOf(needle) !== -1) ? '' : 'none';
+            });
+          }
+          var input = document.getElementById('search-input');
+          var btn = document.getElementById('search-btn');
+          if (input) {
+            input.addEventListener('input', function() { applyFilter(input.value); });
+          }
+          if (btn && input) {
+            btn.addEventListener('click', function() { applyFilter(input.value); });
+          }
+        })();
+        </script>
+{%- endblock %}
