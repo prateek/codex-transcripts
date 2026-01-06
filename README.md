@@ -2,6 +2,10 @@
 
 Convert Codex session rollout files (`rollout-*.jsonl`) into a clean, mobile-friendly HTML transcript viewer (`index.html` + lazy-loaded chunks).
 
+## Example
+
+![Example transcript viewer](example.png)
+
 This is an adaptation of `simonw/claude-code-transcripts` (Apache-2.0) for Codex rollout files.
 That project is the primary source of inspiration and the origin of the HTML/CSS transcript rendering approach used here.
 See: https://github.com/simonw/claude-code-transcripts
