@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Codex transcript - Chat{% endblock %}
+
+{% block body_class %}chat-body{% endblock %}
+
+{% block content %}
+        <div class="header-row">
+            <h1>Codex transcript (chat)</h1>
+            <div class="header-controls">
+                {% include "theme_toggle.html" %}
+            </div>
+        </div>
+
+        <p class="viewer-summary">{{ total_groups }} conversations - {{ total_messages }} messages{% if task_time_summary %} - {{ task_time_summary }}{% endif %}</p>
+
+        <div class="chat-view">
+            <div class="chat-transcript">
+                {% for g in chat_groups %}
+                <div class="chat-group" id="group-{{ g.group_index }}">
+                    <div class="chat-group-header">
+                        <span class="chat-group-label">{{ g.display_label }}</span>
+                        <time datetime="{{ g.start_ts }}" data-timestamp="{{ g.start_ts }}">{{ g.start_ts }}</time>
+                        <span class="chat-group-duration">{{ g.duration_label }}</span>
+                    </div>
+                    <div class="chat-messages">
+                    {% if g.messages_html %}
+                        {% for msg_html in g.messages_html %}
+                            {{ msg_html | safe }}
+                        {% endfor %}
+                    {% else %}
+                        <div class="chat-group-empty">(no user/assistant messages)</div>
+                    {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+{%- endblock %}
