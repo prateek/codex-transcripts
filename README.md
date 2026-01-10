@@ -36,6 +36,9 @@ codex-transcripts
 # Convert a specific rollout file
 codex-transcripts json ~/.codex/sessions/2026/01/01/rollout-...jsonl -o ./out --open
 
+# Render chat-style bubbles (user right, assistant left)
+codex-transcripts json ~/.codex/sessions/2026/01/01/rollout-...jsonl -o ./out --style chat --open
+
 # Emit normalized JSON instead of HTML
 codex-transcripts local --latest --format json -o ./out
 

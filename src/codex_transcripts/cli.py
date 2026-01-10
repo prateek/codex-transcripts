@@ -138,6 +138,14 @@ Run without cloning (from a git URL):
     show_default=True,
     help="Output format.",
 )
+@click.option(
+    "--style",
+    "output_style",
+    type=click.Choice(["viewer", "chat"], case_sensitive=False),
+    default="viewer",
+    show_default=True,
+    help="HTML style (viewer or chat).",
+)
 def local_cmd(
     codex_home: Path | None,
     limit: int,
@@ -154,6 +162,7 @@ def local_cmd(
     gist_public: bool,
     include_source: bool,
     output_format: str,
+    output_style: str,
 ) -> None:
     if show_all and cwd_only:
         raise click.ClickException("--all and --cwd are mutually exclusive.")
@@ -171,6 +180,8 @@ def local_cmd(
 
     if output_format == "json" and (open_browser or gist):
         raise click.ClickException("--open/--gist are only supported for HTML output.")
+    if output_format == "json" and output_style != "viewer":
+        raise click.ClickException("--style is only supported for HTML output.")
 
     show_cwd = not cwd_only
     metrics = calculate_resume_style_metrics(rows, show_cwd=show_cwd)
@@ -222,6 +233,7 @@ def local_cmd(
             out_dir,
             github_repo=repo,
             include_json=include_source,
+            style=output_style,
         )
 
         _print_stats(stats)
@@ -265,6 +277,7 @@ def local_cmd(
                 subdir,
                 github_repo=repo,
                 include_json=include_source,
+                style=output_style,
             )
             out_path = out_dir / "index.html"
         _print_stats(stats)
@@ -403,6 +416,14 @@ def tui_cmd(
     show_default=True,
     help="Output format.",
 )
+@click.option(
+    "--style",
+    "output_style",
+    type=click.Choice(["viewer", "chat"], case_sensitive=False),
+    default="viewer",
+    show_default=True,
+    help="HTML style (viewer or chat).",
+)
 def json_cmd(
     path: Path,
     output: str | None,
@@ -413,12 +434,15 @@ def json_cmd(
     gist_public: bool,
     include_source: bool,
     output_format: str,
+    output_style: str,
 ) -> None:
     if not path.exists():
         raise click.ClickException(f"File not found: {path}")
 
     if output_format == "json" and (open_browser or gist):
         raise click.ClickException("--open/--gist are only supported for HTML output.")
+    if output_format == "json" and output_style != "viewer":
+        raise click.ClickException("--style is only supported for HTML output.")
 
     out_dir, open_by_default = _ensure_output_dir(output, output_auto=output_auto, rollout_path=path)
     if output_format == "json":
@@ -440,6 +464,7 @@ def json_cmd(
         out_dir,
         github_repo=repo,
         include_json=include_source,
+        style=output_style,
     )
     _print_stats(stats)
 
