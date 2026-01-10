@@ -15,6 +15,7 @@ from codex_transcripts.render import (
     format_tool_stats,
     get_template,
     make_msg_id,
+    render_chat_message,
     render_markdown_text,
     render_message,
 )
@@ -147,21 +148,14 @@ def _format_duration_ms(ms: int | None) -> str:
     return f"{hours}h {mins_rem:02d}m"
 
 
-def generate_html_from_session_data(
+def _collect_transcript_items(
     session_data: dict[str, Any],
-    output_dir: str | Path,
     *,
     github_repo: str | None,
-    stats: ParseStats | None = None,
-) -> None:
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    collect_html: bool = True,
+) -> tuple[list[str], list[str], list[str], list[str], list[tuple[str, str, str]]]:
     loglines = session_data.get("loglines", [])
-    warnings_html = _format_drift_warning_html(stats)
 
-    # Render all transcript messages into lazy-loaded chunks, then build a threaded/foldable view
-    # that loads conversation bodies on demand.
     transcript_items_html: list[str] = []
     transcript_item_ids: list[str] = []
     transcript_item_kinds: list[str] = []
@@ -182,18 +176,26 @@ def generate_html_from_session_data(
         if not msg_html:
             continue
 
-        transcript_items_html.append(msg_html)
+        if collect_html:
+            transcript_items_html.append(msg_html)
         transcript_item_ids.append(make_msg_id(timestamp))
         transcript_item_kinds.append(_classify_message_kind(log_type, message_data))
         transcript_item_timestamps.append(timestamp)
         transcript_item_messages.append((log_type, message_json, timestamp))
 
-    chunk_paths = _write_transcript_chunks(
-        output_dir=output_dir,
-        items_html=transcript_items_html,
-        chunk_size=TRANSCRIPT_CHUNK_SIZE,
+    return (
+        transcript_items_html,
+        transcript_item_ids,
+        transcript_item_kinds,
+        transcript_item_timestamps,
+        transcript_item_messages,
     )
 
+
+def _build_conversation_groups(
+    transcript_item_messages: list[tuple[str, str, str]],
+    transcript_item_timestamps: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
     # Conversation groups: split on user prompts, but include any leading system events as the
     # first group ("session start").
     groups: list[dict[str, Any]] = []
@@ -325,6 +327,39 @@ def generate_html_from_session_data(
             f"max {_format_duration_ms(max(task_duration_ms))}"
         )
 
+    return groups, rendered_groups, task_time_summary
+
+
+def generate_html_from_session_data(
+    session_data: dict[str, Any],
+    output_dir: str | Path,
+    *,
+    github_repo: str | None,
+    stats: ParseStats | None = None,
+) -> None:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    warnings_html = _format_drift_warning_html(stats)
+
+    (
+        transcript_items_html,
+        transcript_item_ids,
+        transcript_item_kinds,
+        transcript_item_timestamps,
+        transcript_item_messages,
+    ) = _collect_transcript_items(session_data, github_repo=github_repo, collect_html=True)
+
+    chunk_paths = _write_transcript_chunks(
+        output_dir=output_dir,
+        items_html=transcript_items_html,
+        chunk_size=TRANSCRIPT_CHUNK_SIZE,
+    )
+
+    _, rendered_groups, task_time_summary = _build_conversation_groups(
+        transcript_item_messages, transcript_item_timestamps
+    )
+
     kind_to_char = {"user": "u", "assistant": "a", "tool_call": "t", "tool_reply": "r", "system": "s"}
     kinds_compact = "".join(kind_to_char.get(k, "s") for k in transcript_item_kinds)
 
@@ -353,12 +388,72 @@ def generate_html_from_session_data(
     (output_dir / "index.html").write_text(index_content, encoding="utf-8")
 
 
+def generate_chat_html_from_session_data(
+    session_data: dict[str, Any],
+    output_dir: str | Path,
+    *,
+    github_repo: str | None,
+) -> None:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    _, _, _, transcript_item_timestamps, transcript_item_messages = _collect_transcript_items(
+        session_data, github_repo=github_repo, collect_html=False
+    )
+
+    groups, rendered_groups, task_time_summary = _build_conversation_groups(
+        transcript_item_messages, transcript_item_timestamps
+    )
+
+    chat_groups: list[dict[str, Any]] = []
+    total_chat_messages = 0
+    for idx, group in enumerate(groups):
+        rendered = rendered_groups[idx]
+        messages_html: list[str] = []
+        meta_text = None
+        meta_parts: list[str] = []
+        tool_stats = rendered.get("tool_stats")
+        if isinstance(tool_stats, str) and tool_stats.strip():
+            meta_parts.append(tool_stats.strip())
+        duration_label = rendered.get("duration_label")
+        if isinstance(duration_label, str) and duration_label.strip() and duration_label != "-":
+            meta_parts.append(duration_label.strip())
+        if meta_parts:
+            meta_text = " - ".join(meta_parts)
+        for log_type, message_json, timestamp in group["messages"]:
+            msg_html = render_chat_message(
+                log_type,
+                message_json,
+                timestamp,
+                github_repo,
+                meta_text=meta_text if log_type == "assistant" else None,
+            )
+            if msg_html:
+                messages_html.append(msg_html)
+        total_chat_messages += len(messages_html)
+        payload = dict(rendered)
+        payload["messages_html"] = messages_html
+        chat_groups.append(payload)
+
+    template = get_template("chat.html")
+    html = template.render(
+        css=CSS,
+        js=JS,
+        chat_groups=chat_groups,
+        total_messages=total_chat_messages,
+        total_groups=len(rendered_groups),
+        task_time_summary=task_time_summary,
+    )
+    (output_dir / "index.html").write_text(html, encoding="utf-8")
+
+
 def generate_html_from_rollout(
     rollout_path: str | Path,
     output_dir: str | Path,
     *,
     github_repo: str | None = None,
     include_json: bool = False,
+    style: str = "viewer",
 ) -> tuple[Path, SessionMeta | None, ParseStats]:
     session_data, meta, stats = parse_rollout_file(
         rollout_path,
@@ -379,7 +474,13 @@ def generate_html_from_rollout(
 
         github_repo = detect_github_repo_from_url(meta.git.get("repository_url"))
 
-    generate_html_from_session_data(session_data, out_dir, github_repo=github_repo, stats=stats)
+    if style not in {"viewer", "chat"}:
+        raise ValueError(f"Unknown render style: {style}")
+
+    if style == "chat":
+        generate_chat_html_from_session_data(session_data, out_dir, github_repo=github_repo)
+    else:
+        generate_html_from_session_data(session_data, out_dir, github_repo=github_repo, stats=stats)
     return out_dir, meta, stats
 
 

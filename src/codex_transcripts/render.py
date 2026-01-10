@@ -330,6 +330,91 @@ def render_message(log_type: str, message_json: str, timestamp: str, github_repo
     return _macros.message(role_class, role_label, msg_id, timestamp, content_html)
 
 
+def _render_chat_blocks(content: list[Any]) -> str:
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, dict):
+            btype = block.get("type", "")
+            if btype in {"text", "output_text", "input_text"}:
+                text = block.get("text", "")
+                if isinstance(text, str) and text.strip():
+                    parts.append(render_markdown_text(text))
+                continue
+            if btype == "image":
+                source = block.get("source", {}) if isinstance(block.get("source"), dict) else {}
+                media_type = source.get("media_type", "image/png")
+                data = source.get("data", "")
+                parts.append(_macros.image_block(media_type, data))
+                continue
+            continue
+        if isinstance(block, str) and block.strip():
+            parts.append(render_markdown_text(block))
+    return "".join(parts)
+
+
+def extract_codex_user_request(text: str) -> str:
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        normalized = stripped.lstrip("#").strip()
+        if not normalized:
+            continue
+        lowered = normalized.lower()
+        if lowered.startswith("my request for codex"):
+            remainder = normalized[len("my request for codex") :].lstrip(" :")
+            tail = "\n".join(lines[i + 1 :])
+            if remainder and tail:
+                return (remainder + "\n" + tail).strip()
+            if remainder:
+                return remainder.strip()
+            if tail:
+                return tail.strip()
+            break
+    return text
+
+
+def render_chat_message(
+    log_type: str,
+    message_json: str,
+    timestamp: str,
+    github_repo: str | None,
+    *,
+    meta_text: str | None = None,
+) -> str:
+    if not message_json:
+        return ""
+    if log_type not in {"user", "assistant"}:
+        return ""
+    try:
+        message_data = json.loads(message_json)
+    except json.JSONDecodeError:
+        return ""
+
+    if log_type == "user" and is_tool_result_message(message_data):
+        return ""
+
+    content = message_data.get("content", "")
+    if isinstance(content, str):
+        if log_type == "user":
+            content = extract_codex_user_request(content)
+        if is_json_like(content):
+            content_html = format_json(content)
+        else:
+            content_html = render_markdown_text(content)
+    elif isinstance(content, list):
+        content_html = _render_chat_blocks(content)
+    else:
+        content_html = render_markdown_text(str(content))
+
+    if not content_html.strip():
+        return ""
+
+    msg_id = make_msg_id(timestamp)
+    return _macros.chat_message(log_type, msg_id, timestamp, content_html, meta_text or "")
+
+
 # CSS / JS are borrowed from claude-code-transcripts and intentionally embedded so
 # output is standalone (no external assets required).
 CSS = """
@@ -339,8 +424,8 @@ CSS = """
   --card-bg: #ffffff;
   --user-bg: #e3f2fd;
   --user-border: #1976d2;
-  --assistant-bg: #f5f5f5;
-  --assistant-border: #9e9e9e;
+  --assistant-bg: #e8eaee;
+  --assistant-border: #7d8793;
   --thinking-bg: #fff8e1;
   --thinking-border: #ffc107;
   --thinking-text: #666;
@@ -516,6 +601,7 @@ CSS = """
 }
 * { box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-color); color: var(--text-color); margin: 0; padding: 16px; line-height: 1.6; }
+.chat-body .container { max-width: 100%; }
 .container { max-width: 800px; margin: 0 auto; }
 h1 { font-size: 1.5rem; margin-bottom: 24px; padding-bottom: 8px; border-bottom: 2px solid var(--user-border); }
 .header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-bottom: 2px solid var(--user-border); padding-bottom: 8px; margin-bottom: 24px; }
@@ -693,6 +779,31 @@ a.control-btn { text-decoration: none; }
 .minimap-tip-body { color: var(--text-muted); }
 .minimap-tip-k { font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; font-size: 0.75rem; color: var(--text-muted); }
 .minimap-tip-prompt { margin-top: 4px; color: var(--text-color); }
+
+/* Chat view */
+.chat-view { display: flex; flex-direction: column; gap: 24px; }
+.chat-transcript { display: flex; flex-direction: column; gap: 24px; }
+.chat-group { padding: 8px 0 4px 0; border-top: 1px solid var(--border-subtle); }
+.chat-group:first-child { border-top: none; }
+.chat-group-header { display: flex; align-items: baseline; gap: 12px; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+.chat-group-label { font-weight: 600; color: var(--user-border); }
+.chat-messages { display: flex; flex-direction: column; gap: 8px; }
+.chat-message { display: flex; flex-direction: column; align-items: flex-start; }
+.chat-message.user { align-items: flex-end; }
+.chat-message.assistant { align-items: flex-start; }
+.chat-bubble { max-width: min(76%, 720px); padding: 10px 14px; border-radius: 18px; background: var(--assistant-bg); color: var(--text-color); box-shadow: 0 1px 2px var(--shadow-color); font-size: 1.2em; }
+.chat-message.assistant .chat-bubble { border: 1px solid var(--assistant-border); }
+.chat-body .chat-bubble { max-width: clamp(240px, 74%, 900px); }
+.chat-bubble p { margin: 0 0 0.6em 0; }
+.chat-bubble p:last-child { margin-bottom: 0; }
+.chat-message.user .chat-bubble { background: var(--user-border); color: #ffffff; }
+.chat-message.user .chat-bubble a { color: #ffffff; text-decoration: underline; }
+.chat-message.user .chat-bubble code { background: rgba(255,255,255,0.2); }
+.chat-message.user .chat-bubble pre { background: rgba(0,0,0,0.35); }
+.chat-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.chat-meta .timestamp-link { font-size: 0.75rem; }
+.chat-meta-extra { margin-left: 4px; }
+.chat-group-empty { font-size: 0.85rem; color: var(--text-muted); font-style: italic; }
 
 /* Help dialog */
 .kb-help { width: min(720px, 95vw); border: none; border-radius: 12px; padding: 0; box-shadow: 0 12px 40px rgba(0,0,0,0.25); background: var(--card-bg); color: var(--text-color); }

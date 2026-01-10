@@ -82,3 +82,20 @@ def test_generate_html_includes_format_drift_warning_for_unknown_response_item_t
     chunk_js = (out_dir / "chunks" / "chunk-000.js").read_text(encoding="utf-8")
     assert "system-record" in chunk_js
     assert "response_item:mystery_item" in chunk_js
+
+
+def test_generate_chat_html_uses_bubbles_and_no_minimap(tmp_path: Path):
+    rollout = Path(__file__).parent / "sample_rollout.jsonl"
+    out_dir, _meta, _stats = generate_html_from_rollout(
+        rollout,
+        tmp_path / "out",
+        style="chat",
+    )
+
+    index_html = (out_dir / "index.html").read_text(encoding="utf-8")
+    assert 'class="chat-message user"' in index_html
+    assert 'class="chat-message assistant"' in index_html
+    assert "chat-index-message" not in index_html
+    assert 'id="minimap"' not in index_html
+
+    assert not (out_dir / "chunks").exists()
