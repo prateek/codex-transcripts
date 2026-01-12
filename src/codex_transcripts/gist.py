@@ -1,130 +1,105 @@
 from __future__ import annotations
 
+import json
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import click
 
 
-GIST_PREVIEW_JS = r"""
-(function() {
-  function isGistHost() {
-    return location.hostname === 'gisthost.github.io' || location.hostname === 'gistpreview.github.io';
-  }
-
-  function getGistPrefix() {
-    var qs = location.search || '';
-    // Query-string preview expects everything under ?{gistId}/...
-    var qm = qs.match(/^\?([a-f0-9]+)(?:\/|$)/i);
-    if (qm) return '?' + qm[1] + '/';
-
-    // Path-based preview expects everything under /{gistId}/...
-    var parts = location.pathname.split('/').filter(Boolean);
-    if (parts.length && /^[a-f0-9]+$/i.test(parts[0])) return '/' + parts[0] + '/';
-
-    return null;
-  }
-
-  function fixLink(a, prefix) {
-    if (!a || !a.getAttribute) return;
-    var href = a.getAttribute('href');
-    if (!href) return;
-    if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('#') || href.startsWith('?') || href.startsWith('/')) return;
-    // Rewrite relative links to include the gist prefix for gist preview.
-    a.setAttribute('href', prefix + href.replace(/^\\.\\//, ''));
-  }
-
-  function fixAllLinks(prefix, root) {
-    var container = root || document;
-    container.querySelectorAll('a[href]').forEach(function(a) { fixLink(a, prefix); });
-  }
-
-  function init() {
-    if (!isGistHost()) return;
-    var prefix = getGistPrefix();
-    if (!prefix) return;
-    fixAllLinks(prefix, document);
-
-    // Observe dynamic content changes (SPA navigation on gistpreview.github.io)
-    var observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(m) {
-        m.addedNodes.forEach(function(node) {
-          if (node.nodeType === 1) {
-            fixAllLinks(prefix, node);
-          }
-        });
-      });
-    });
-
-    function startObserving() {
-      if (document.body) {
-        observer.observe(document.body, { childList: true, subtree: true });
-      } else {
-        setTimeout(startObserving, 10);
-      }
-    }
-    startObserving();
-
-    // Handle fragment navigation after dynamic content loads
-    function scrollToFragment() {
-      var hash = window.location.hash;
-      if (!hash) return false;
-      var targetId = hash.substring(1);
-      var target = document.getElementById(targetId);
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return true;
-      }
-      return false;
-    }
-
-    if (!scrollToFragment()) {
-      var delays = [100, 300, 500, 1000, 2000];
-      delays.forEach(function(delay) { setTimeout(scrollToFragment, delay); });
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
-"""
+@dataclass(frozen=True)
+class GistInfo:
+    gist_id: str
+    gist_url: str
+    raw_url: str | None
+    preview_url: str | None
 
 
-def inject_gist_preview_js(output_dir: str | Path) -> None:
-    output_dir = Path(output_dir)
-    for html_file in output_dir.glob("*.html"):
-        content = html_file.read_text(encoding="utf-8")
-        if "</body>" in content:
-            content = content.replace("</body>", f"<script>{GIST_PREVIEW_JS}</script>\n</body>")
-            html_file.write_text(content, encoding="utf-8")
-
-
-def create_gist(output_dir: str | Path, *, public: bool = False) -> tuple[str, str]:
-    output_dir = Path(output_dir)
-    html_files = list(output_dir.glob("*.html"))
-    if not html_files:
-        raise click.ClickException("No HTML files found to upload to gist.")
-
-    asset_files = list((output_dir / "chunks").glob("*.js"))
-
-    cmd: list[str] = ["gh", "gist", "create"]
-    cmd.extend(str(f) for f in sorted(html_files))
-    cmd.extend(str(f) for f in sorted(asset_files))
-    if public:
-        cmd.append("--public")
-
+def _run_gh(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        gist_url = result.stdout.strip()
-        gist_id = gist_url.rstrip("/").split("/")[-1]
-        return gist_id, gist_url
+        return subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr.strip() if e.stderr else str(e)
-        raise click.ClickException(f"Failed to create gist: {error_msg}") from e
+        raise click.ClickException(f"Failed to run gh: {error_msg}") from e
     except FileNotFoundError as e:
         raise click.ClickException(
             "gh CLI not found. Install it from https://cli.github.com/ and run 'gh auth login'."
         ) from e
+
+
+def _fetch_gist_details(gist_id: str) -> dict[str, Any] | None:
+    try:
+        result = _run_gh(["gh", "api", f"/gists/{gist_id}"])
+    except click.ClickException:
+        return None
+    try:
+        payload: Any = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def create_gist(html_file: str | Path, *, public: bool = False) -> GistInfo:
+    html_file = Path(html_file)
+    if not html_file.exists():
+        raise click.ClickException(f"HTML file not found: {html_file}")
+
+    cmd: list[str] = ["gh", "gist", "create", str(html_file)]
+    if public:
+        cmd.append("--public")
+    result = _run_gh(cmd)
+
+    gist_url = result.stdout.strip()
+    gist_id = gist_url.rstrip("/").split("/")[-1]
+
+    raw_url: str | None = None
+    preview_url: str | None = None
+
+    details = _fetch_gist_details(gist_id)
+    if details:
+        owner = details.get("owner", {})
+        owner_login = owner.get("login") if isinstance(owner, dict) else None
+
+        history = details.get("history", [])
+        latest_version: str | None = None
+        if isinstance(history, list) and history:
+            h0 = history[0]
+            if isinstance(h0, dict):
+                latest_version = h0.get("version")
+
+        files = details.get("files", {})
+        filename: str | None = None
+        if isinstance(files, dict) and files:
+            if html_file.name in files:
+                filename = html_file.name
+            else:
+                filename = next(iter(files.keys()))
+
+        if filename and isinstance(files.get(filename), dict):
+            raw = files[filename].get("raw_url")
+            if isinstance(raw, str) and raw:
+                raw_url = raw
+
+        if (
+            isinstance(owner_login, str)
+            and owner_login
+            and isinstance(latest_version, str)
+            and latest_version
+            and isinstance(filename, str)
+            and filename
+        ):
+            # gistcdn.githack.com serves the file with a proper content-type so browsers render HTML.
+            preview_url = (
+                f"https://gistcdn.githack.com/{owner_login}/{gist_id}/raw/{latest_version}/{filename}"
+            )
+
+    if preview_url is None:
+        # Best-effort fallback (works for single-file HTML gists, but depends on the preview host).
+        preview_url = f"https://gisthost.github.io/?{gist_id}/{html_file.name}"
+
+    return GistInfo(gist_id=gist_id, gist_url=gist_url, raw_url=raw_url, preview_url=preview_url)
+

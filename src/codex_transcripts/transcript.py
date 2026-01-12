@@ -57,23 +57,30 @@ def _classify_message_kind(log_type: str, message_data: dict[str, Any]) -> str:
     return "system"
 
 
-def _write_transcript_chunks(
+def _escape_json_for_inline_script(payload: str) -> str:
+    # Avoid accidental HTML/script-tag termination when embedding JSON in a <script> tag.
+    # Mirrors common escaping used by web frameworks when embedding JSON in HTML.
+    return (
+        payload.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
+def _generate_transcript_chunk_scripts(
     *,
-    output_dir: Path,
     items_html: list[str],
     chunk_size: int,
-) -> list[str]:
-    chunks_dir = output_dir / "chunks"
-    chunks_dir.mkdir(parents=True, exist_ok=True)
-
-    chunk_paths: list[str] = []
+) -> tuple[list[str], list[str]]:
+    chunk_scripts: list[str] = []
+    chunk_placeholders: list[str] = []
     for chunk_idx in range((len(items_html) + chunk_size - 1) // chunk_size):
         start = chunk_idx * chunk_size
         chunk_items = items_html[start : start + chunk_size]
-        filename = f"chunk-{chunk_idx:03d}.js"
 
-        # JSON is valid JS, and using an external script avoids any </script> HTML parsing issues.
-        payload = json.dumps(chunk_items, ensure_ascii=False)
+        payload = _escape_json_for_inline_script(json.dumps(chunk_items, ensure_ascii=False))
         js = (
             f"(function(){{\n"
             f"  var items = {payload};\n"
@@ -86,9 +93,9 @@ def _write_transcript_chunks(
             f"  }}\n"
             f"}})();\n"
         )
-        (chunks_dir / filename).write_text(js, encoding="utf-8")
-        chunk_paths.append(f"chunks/{filename}")
-    return chunk_paths
+        chunk_scripts.append(js)
+        chunk_placeholders.append("")
+    return chunk_scripts, chunk_placeholders
 
 
 def _format_drift_warning_html(stats: ParseStats | None) -> str:
@@ -149,13 +156,13 @@ def _format_duration_ms(ms: int | None) -> str:
 
 def generate_html_from_session_data(
     session_data: dict[str, Any],
-    output_dir: str | Path,
+    output_path: str | Path,
     *,
     github_repo: str | None,
     stats: ParseStats | None = None,
 ) -> None:
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     loglines = session_data.get("loglines", [])
     warnings_html = _format_drift_warning_html(stats)
@@ -188,8 +195,7 @@ def generate_html_from_session_data(
         transcript_item_timestamps.append(timestamp)
         transcript_item_messages.append((log_type, message_json, timestamp))
 
-    chunk_paths = _write_transcript_chunks(
-        output_dir=output_dir,
+    chunk_scripts, chunk_placeholders = _generate_transcript_chunk_scripts(
         items_html=transcript_items_html,
         chunk_size=TRANSCRIPT_CHUNK_SIZE,
     )
@@ -329,10 +335,10 @@ def generate_html_from_session_data(
     kinds_compact = "".join(kind_to_char.get(k, "s") for k in transcript_item_kinds)
 
     viewer_meta = {
-        "format": "codex-transcripts.viewer.v2",
+        "format": "codex-transcripts.viewer.v3",
         "total": len(transcript_items_html),
         "chunk_size": TRANSCRIPT_CHUNK_SIZE,
-        "chunks": chunk_paths,
+        "chunks": chunk_placeholders,
         "kinds": kinds_compact,
         "ids": transcript_item_ids,
         "ts": transcript_item_timestamps,
@@ -345,12 +351,13 @@ def generate_html_from_session_data(
         js=JS,
         warnings_html=warnings_html,
         meta_json=json.dumps(viewer_meta, ensure_ascii=False),
+        chunk_scripts=chunk_scripts,
         groups=rendered_groups,
         total_messages=len(transcript_items_html),
         total_groups=len(rendered_groups),
         task_time_summary=task_time_summary,
     )
-    (output_dir / "index.html").write_text(index_content, encoding="utf-8")
+    output_path.write_text(index_content, encoding="utf-8")
 
 
 def generate_html_from_rollout(
@@ -364,7 +371,13 @@ def generate_html_from_rollout(
         rollout_path,
     )
 
-    out_dir = Path(output_dir)
+    output = Path(output_dir)
+    if output.suffix.lower() in {".html", ".htm"}:
+        out_dir = output.parent
+        output_path = output
+    else:
+        out_dir = output
+        output_path = out_dir / "index.html"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if include_json:
@@ -379,8 +392,8 @@ def generate_html_from_rollout(
 
         github_repo = detect_github_repo_from_url(meta.git.get("repository_url"))
 
-    generate_html_from_session_data(session_data, out_dir, github_repo=github_repo, stats=stats)
-    return out_dir, meta, stats
+    generate_html_from_session_data(session_data, output_path, github_repo=github_repo, stats=stats)
+    return output_path, meta, stats
 
 
 def generate_json_from_rollout(
@@ -415,8 +428,12 @@ def generate_json_from_rollout(
 
 
 def open_output(output_dir: str | Path) -> None:
-    index = Path(output_dir) / "index.html"
-    webbrowser.open(index.resolve().as_uri())
+    output = Path(output_dir)
+    if output.is_dir():
+        index = output / "index.html"
+        webbrowser.open(index.resolve().as_uri())
+        return
+    webbrowser.open(output.resolve().as_uri())
 
 
 def default_output_dir() -> Path:

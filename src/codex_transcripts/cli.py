@@ -7,7 +7,7 @@ import click
 from click_default_group import DefaultGroup
 import questionary
 
-from codex_transcripts.gist import create_gist, inject_gist_preview_js
+from codex_transcripts.gist import create_gist
 from codex_transcripts.rollout import (
     calculate_resume_style_metrics,
     format_resume_style_row,
@@ -121,7 +121,7 @@ Run without cloning (from a git URL):
 )
 @click.option("--repo", help="GitHub repo owner/name for commit links (auto-detected from session meta if omitted).")
 @click.option("--open", "open_browser", is_flag=True, help="Open generated index.html in your browser.")
-@click.option("--gist", is_flag=True, help="Upload HTML files to a GitHub Gist (requires gh auth).")
+@click.option("--gist", is_flag=True, help="Upload the generated HTML to a GitHub Gist (requires gh auth).")
 @click.option("--gist-public", is_flag=True, help="Create a public Gist (default: secret).")
 @click.option(
     "--include-source",
@@ -217,7 +217,7 @@ def local_cmd(
             click.echo(f"Output: {out_dir}")
             return
 
-        out_dir, meta, stats = generate_html_from_rollout(
+        out_html, meta, stats = generate_html_from_rollout(
             selected,
             out_dir,
             github_repo=repo,
@@ -227,21 +227,22 @@ def local_cmd(
         _print_stats(stats)
 
         if meta is not None:
-            meta_path = out_dir / "session_meta.json"
+            meta_path = out_html.parent / "session_meta.json"
             meta_path.write_text(json.dumps(as_meta_dict(meta), indent=2, ensure_ascii=False) + "\n")
 
         if gist:
             click.echo("Creating GitHub gist...")
-            inject_gist_preview_js(out_dir)
-            gist_id, gist_url = create_gist(out_dir, public=gist_public)
-            preview = f"https://gisthost.github.io/?{gist_id}/index.html"
-            click.echo(f"Gist: {gist_url}")
-            click.echo(f"Preview: {preview}")
+            gist_info = create_gist(out_html, public=gist_public)
+            click.echo(f"Gist: {gist_info.gist_url}")
+            if gist_info.preview_url:
+                click.echo(f"Preview: {gist_info.preview_url}")
+            if gist_info.raw_url:
+                click.echo(f"Raw: {gist_info.raw_url}")
 
         if open_browser or open_by_default:
-            open_output(out_dir)
+            open_output(out_html)
 
-        click.echo(f"Output: {out_dir}")
+        click.echo(f"Output: {out_html}")
         return
 
     # Multi-selection: create output root and generate each session into an auto-named subdir.
@@ -260,13 +261,13 @@ def local_cmd(
                 include_source=include_source,
             )
         else:
-            out_dir, meta, stats = generate_html_from_rollout(
+            out_html, meta, stats = generate_html_from_rollout(
                 p,
                 subdir,
                 github_repo=repo,
                 include_json=include_source,
             )
-            out_path = out_dir / "index.html"
+            out_path = out_html
         _print_stats(stats)
         if meta is not None:
             (subdir / "session_meta.json").write_text(
@@ -386,7 +387,7 @@ def tui_cmd(
 )
 @click.option("--repo", help="GitHub repo owner/name for commit links (auto-detected from session meta if omitted).")
 @click.option("--open", "open_browser", is_flag=True, help="Open generated index.html in your browser.")
-@click.option("--gist", is_flag=True, help="Upload HTML files to a GitHub Gist (requires gh auth).")
+@click.option("--gist", is_flag=True, help="Upload the generated HTML to a GitHub Gist (requires gh auth).")
 @click.option("--gist-public", is_flag=True, help="Create a public Gist (default: secret).")
 @click.option(
     "--include-source",
@@ -435,7 +436,7 @@ def json_cmd(
         click.echo(f"Output: {out_dir}")
         return
 
-    out_dir, meta, stats = generate_html_from_rollout(
+    out_html, meta, stats = generate_html_from_rollout(
         path,
         out_dir,
         github_repo=repo,
@@ -444,21 +445,22 @@ def json_cmd(
     _print_stats(stats)
 
     if meta is not None:
-        meta_path = out_dir / "session_meta.json"
+        meta_path = out_html.parent / "session_meta.json"
         meta_path.write_text(json.dumps(as_meta_dict(meta), indent=2, ensure_ascii=False) + "\n")
 
     if gist:
         click.echo("Creating GitHub gist...")
-        inject_gist_preview_js(out_dir)
-        gist_id, gist_url = create_gist(out_dir, public=gist_public)
-        preview = f"https://gisthost.github.io/?{gist_id}/index.html"
-        click.echo(f"Gist: {gist_url}")
-        click.echo(f"Preview: {preview}")
+        gist_info = create_gist(out_html, public=gist_public)
+        click.echo(f"Gist: {gist_info.gist_url}")
+        if gist_info.preview_url:
+            click.echo(f"Preview: {gist_info.preview_url}")
+        if gist_info.raw_url:
+            click.echo(f"Raw: {gist_info.raw_url}")
 
     if open_browser or open_by_default:
-        open_output(out_dir)
+        open_output(out_html)
 
-    click.echo(f"Output: {out_dir}")
+    click.echo(f"Output: {out_html}")
 
 
 def main() -> None:

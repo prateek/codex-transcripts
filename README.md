@@ -1,6 +1,6 @@
 # codex-transcripts
 
-Convert Codex session rollout files (`rollout-*.jsonl`) into a clean, mobile-friendly HTML transcript viewer (`index.html` + lazy-loaded chunks).
+Convert Codex session rollout files (`rollout-*.jsonl`) into a clean, mobile-friendly, self-contained HTML transcript viewer (`index.html`).
 
 ## Example
 
@@ -40,7 +40,7 @@ codex-transcripts json ~/.codex/sessions/2026/01/01/rollout-...jsonl -o ./out --
 codex-transcripts local --latest --format json -o ./out
 
 # Publish to a GitHub Gist (requires gh auth)
-codex-transcripts --gist
+codex-transcripts local --latest --gist
 
 # TUI transcript viewer (experimental/alpha; fold/unfold + filtering)
 codex-transcripts tui

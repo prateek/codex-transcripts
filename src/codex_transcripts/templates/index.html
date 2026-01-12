@@ -90,6 +90,11 @@ UI
         <script>
 window.__CODEX_TRANSCRIPTS_META__ = {{ meta_json|safe }};
         </script>
+        {% for chunk_js in chunk_scripts %}
+        <script>
+{{ chunk_js|safe }}
+        </script>
+        {% endfor %}
         <script>
 {% include "viewer.js" %}
         </script>
