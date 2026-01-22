@@ -8,6 +8,7 @@ from click_default_group import DefaultGroup
 import questionary
 
 from codex_transcripts.gist import create_gist
+from codex_transcripts.remote import import_rollout_url
 from codex_transcripts.rollout import (
     calculate_resume_style_metrics,
     format_resume_style_row,
@@ -84,6 +85,7 @@ def cli() -> None:
 Examples:
   codex-transcripts
   codex-transcripts local --latest --open
+  codex-transcripts import https://example.com/rollout-...jsonl
   codex-transcripts json ~/.codex/sessions/YYYY/MM/DD/rollout-...jsonl -o ./out --open
   codex-transcripts local --latest --gist
   codex-transcripts tui --latest  # experimental/alpha
@@ -374,6 +376,40 @@ def tui_cmd(
         raise click.ClickException(f"File not found: {rollout_path}")
 
     run_tui(rollout_path=rollout_path)
+
+
+@cli.command("import")
+@click.argument("url")
+@click.option("--codex-home", type=click.Path(path_type=Path), help="Override CODEX_HOME.")
+@click.option(
+    "--archived",
+    is_flag=True,
+    help="Import into archived_sessions instead of sessions/YYYY/MM/DD.",
+)
+@click.option("--overwrite", is_flag=True, help="Overwrite if the destination file already exists.")
+@click.option(
+    "--max-bytes",
+    type=int,
+    default=50 * 1024 * 1024,
+    show_default=True,
+    help="Maximum allowed download size.",
+)
+def import_cmd(
+    url: str,
+    codex_home: Path | None,
+    archived: bool,
+    overwrite: bool,
+    max_bytes: int,
+) -> None:
+    """Import a remote Codex rollout (.jsonl) into your local CODEX_HOME."""
+    imported = import_rollout_url(
+        url,
+        codex_home=codex_home,
+        archived=archived,
+        overwrite=overwrite,
+        max_bytes=max_bytes,
+    )
+    click.echo(f"Imported: {imported.path}")
 
 
 @cli.command("json")
