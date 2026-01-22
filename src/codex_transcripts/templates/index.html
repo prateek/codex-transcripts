@@ -17,6 +17,17 @@
 
         <p class="viewer-summary">{{ total_groups }} conversations · {{ total_messages }} messages{% if task_time_summary %} · ⏱ {{ task_time_summary }}{% endif %}</p>
 
+        {% if import_command %}
+        <div class="share-notice">
+            <div class="share-notice-title">Import this session on another machine</div>
+            <div class="share-notice-subtitle">Run:</div>
+            <pre class="share-notice-command">{{ import_command }}</pre>
+            {% if import_rollout_url %}
+            <div class="share-notice-subtitle">Rollout URL: <a href="{{ import_rollout_url }}">{{ import_rollout_url }}</a></div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         {{ warnings_html|safe }}
 
         <div class="minimap-wrap minimap-large">

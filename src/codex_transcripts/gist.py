@@ -5,6 +5,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import click
 
@@ -15,6 +16,8 @@ class GistInfo:
     gist_url: str
     raw_url: str | None
     preview_url: str | None
+    owner_login: str | None
+    latest_version: str | None
 
 
 def _run_gh(cmd: list[str]) -> subprocess.CompletedProcess[str]:
@@ -43,21 +46,11 @@ def _fetch_gist_details(gist_id: str) -> dict[str, Any] | None:
     return payload
 
 
-def create_gist(html_file: str | Path, *, public: bool = False) -> GistInfo:
-    html_file = Path(html_file)
-    if not html_file.exists():
-        raise click.ClickException(f"HTML file not found: {html_file}")
-
-    cmd: list[str] = ["gh", "gist", "create", str(html_file)]
-    if public:
-        cmd.append("--public")
-    result = _run_gh(cmd)
-
-    gist_url = result.stdout.strip()
-    gist_id = gist_url.rstrip("/").split("/")[-1]
-
+def _build_gist_info(*, gist_id: str, gist_url: str, html_filename: str) -> GistInfo:
     raw_url: str | None = None
     preview_url: str | None = None
+    owner_login: str | None = None
+    latest_version: str | None = None
 
     details = _fetch_gist_details(gist_id)
     if details:
@@ -65,7 +58,6 @@ def create_gist(html_file: str | Path, *, public: bool = False) -> GistInfo:
         owner_login = owner.get("login") if isinstance(owner, dict) else None
 
         history = details.get("history", [])
-        latest_version: str | None = None
         if isinstance(history, list) and history:
             h0 = history[0]
             if isinstance(h0, dict):
@@ -74,8 +66,8 @@ def create_gist(html_file: str | Path, *, public: bool = False) -> GistInfo:
         files = details.get("files", {})
         filename: str | None = None
         if isinstance(files, dict) and files:
-            if html_file.name in files:
-                filename = html_file.name
+            if html_filename in files:
+                filename = html_filename
             else:
                 filename = next(iter(files.keys()))
 
@@ -99,7 +91,68 @@ def create_gist(html_file: str | Path, *, public: bool = False) -> GistInfo:
 
     if preview_url is None:
         # Best-effort fallback (works for single-file HTML gists, but depends on the preview host).
-        preview_url = f"https://gisthost.github.io/?{gist_id}/{html_file.name}"
+        preview_url = f"https://gisthost.github.io/?{gist_id}/{html_filename}"
 
-    return GistInfo(gist_id=gist_id, gist_url=gist_url, raw_url=raw_url, preview_url=preview_url)
+    return GistInfo(
+        gist_id=gist_id,
+        gist_url=gist_url,
+        raw_url=raw_url,
+        preview_url=preview_url,
+        owner_login=owner_login if isinstance(owner_login, str) else None,
+        latest_version=latest_version if isinstance(latest_version, str) else None,
+    )
 
+
+def get_gist_info(*, gist_id: str, gist_url: str, html_filename: str) -> GistInfo:
+    return _build_gist_info(gist_id=gist_id, gist_url=gist_url, html_filename=html_filename)
+
+
+def raw_gist_file_url(*, owner_login: str, gist_id: str, filename: str) -> str:
+    return f"https://gist.githubusercontent.com/{owner_login}/{gist_id}/raw/{quote(filename)}"
+
+
+def update_gist_file(*, gist_id: str, filename: str, content_file: str | Path) -> None:
+    content_file = Path(content_file)
+    if not content_file.exists():
+        raise click.ClickException(f"File not found: {content_file}")
+    _run_gh(
+        [
+            "gh",
+            "api",
+            "-X",
+            "PATCH",
+            f"/gists/{gist_id}",
+            "-F",
+            f"files[{filename}][content]=@{content_file}",
+        ]
+    )
+
+
+def create_gist(
+    html_file: str | Path,
+    *,
+    public: bool = False,
+    extra_files: list[str | Path] | None = None,
+    description: str | None = None,
+) -> GistInfo:
+    html_file = Path(html_file)
+    if not html_file.exists():
+        raise click.ClickException(f"HTML file not found: {html_file}")
+
+    files: list[Path] = [html_file]
+    if extra_files:
+        files.extend(Path(p) for p in extra_files)
+    for p in files:
+        if not Path(p).exists():
+            raise click.ClickException(f"File not found: {p}")
+
+    cmd: list[str] = ["gh", "gist", "create", *(str(p) for p in files)]
+    if public:
+        cmd.append("--public")
+    if description and description.strip():
+        cmd.extend(["-d", description.strip()])
+    result = _run_gh(cmd)
+
+    gist_url = result.stdout.strip()
+    gist_id = gist_url.rstrip("/").split("/")[-1]
+    return _build_gist_info(gist_id=gist_id, gist_url=gist_url, html_filename=html_file.name)

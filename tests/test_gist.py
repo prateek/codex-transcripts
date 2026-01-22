@@ -53,6 +53,8 @@ def test_create_gist_success(monkeypatch, tmp_path: Path):
         gist.preview_url
         == "https://gistcdn.githack.com/testuser/abc123def456/raw/deadbeef/index.html"
     )
+    assert gist.owner_login == "testuser"
+    assert gist.latest_version == "deadbeef"
 
     cmds = captured.get("cmds") or []
     assert cmds[0] == ["gh", "gist", "create", str(html_path)]

@@ -160,6 +160,8 @@ def generate_html_from_session_data(
     *,
     github_repo: str | None,
     stats: ParseStats | None = None,
+    import_command: str | None = None,
+    import_rollout_url: str | None = None,
 ) -> None:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -350,6 +352,8 @@ def generate_html_from_session_data(
         css=CSS,
         js=JS,
         warnings_html=warnings_html,
+        import_command=import_command,
+        import_rollout_url=import_rollout_url,
         meta_json=json.dumps(viewer_meta, ensure_ascii=False),
         chunk_scripts=chunk_scripts,
         groups=rendered_groups,
@@ -366,6 +370,8 @@ def generate_html_from_rollout(
     *,
     github_repo: str | None = None,
     include_json: bool = False,
+    import_command: str | None = None,
+    import_rollout_url: str | None = None,
 ) -> tuple[Path, SessionMeta | None, ParseStats]:
     session_data, meta, stats = parse_rollout_file(
         rollout_path,
@@ -392,7 +398,14 @@ def generate_html_from_rollout(
 
         github_repo = detect_github_repo_from_url(meta.git.get("repository_url"))
 
-    generate_html_from_session_data(session_data, output_path, github_repo=github_repo, stats=stats)
+    generate_html_from_session_data(
+        session_data,
+        output_path,
+        github_repo=github_repo,
+        stats=stats,
+        import_command=import_command,
+        import_rollout_url=import_rollout_url,
+    )
     return output_path, meta, stats
 
 
