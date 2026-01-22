@@ -33,6 +33,9 @@ uv tool install .
 # Interactive picker for sessions (global by default)
 codex-transcripts
 
+# Import a remote rollout file into your local CODEX_HOME (~/.codex by default)
+codex-transcripts import https://example.com/rollout-...jsonl
+
 # Convert a specific rollout file
 codex-transcripts json ~/.codex/sessions/2026/01/01/rollout-...jsonl -o ./out --open
 
