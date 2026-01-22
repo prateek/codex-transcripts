@@ -7,7 +7,7 @@ import click
 from click_default_group import DefaultGroup
 import questionary
 
-from codex_transcripts.gist import create_gist
+from codex_transcripts.gist import create_gist, get_gist_info, raw_gist_file_url, update_gist_file
 from codex_transcripts.remote import import_rollout_url
 from codex_transcripts.rollout import (
     calculate_resume_style_metrics,
@@ -233,13 +233,57 @@ def local_cmd(
             meta_path.write_text(json.dumps(as_meta_dict(meta), indent=2, ensure_ascii=False) + "\n")
 
         if gist:
-            click.echo("Creating GitHub gist...")
-            gist_info = create_gist(out_html, public=gist_public)
+            click.echo("Publishing to GitHub Gist (HTML + rollout)...")
+            gist_info = create_gist(
+                out_html,
+                public=gist_public,
+                extra_files=[selected],
+                description="Codex transcript (includes rollout for import)",
+            )
+            owner_login = gist_info.owner_login
+            if not owner_login:
+                parts = gist_info.gist_url.rstrip("/").split("/")
+                owner_login = parts[-2] if len(parts) >= 2 else None
+            if not owner_login:
+                raise click.ClickException("Failed to determine Gist owner for import URL.")
+
+            rollout_url = raw_gist_file_url(
+                owner_login=owner_login, gist_id=gist_info.gist_id, filename=selected.name
+            )
+            import_cmd = (
+                "uvx --from git+https://github.com/prateek/codex-transcripts "
+                f"codex-transcripts import '{rollout_url}'"
+            )
+
+            # Re-render HTML with an import hint and update the gist.
+            out_html, meta, stats = generate_html_from_rollout(
+                selected,
+                out_dir,
+                github_repo=repo,
+                include_json=include_source,
+                import_command=import_cmd,
+                import_rollout_url=rollout_url,
+            )
+            if meta is not None:
+                meta_path = out_html.parent / "session_meta.json"
+                meta_path.write_text(
+                    json.dumps(as_meta_dict(meta), indent=2, ensure_ascii=False) + "\n"
+                )
+
+            update_gist_file(gist_id=gist_info.gist_id, filename=out_html.name, content_file=out_html)
+            gist_info = get_gist_info(
+                gist_id=gist_info.gist_id, gist_url=gist_info.gist_url, html_filename=out_html.name
+            )
+
+            click.echo("Published to GitHub Gist:")
             click.echo(f"Gist: {gist_info.gist_url}")
             if gist_info.preview_url:
-                click.echo(f"Preview: {gist_info.preview_url}")
+                click.echo(f"Preview (HTML): {gist_info.preview_url}")
+            click.echo("Import on another machine:")
+            click.echo(import_cmd)
+            click.echo(f"Rollout (raw): {rollout_url}")
             if gist_info.raw_url:
-                click.echo(f"Raw: {gist_info.raw_url}")
+                click.echo(f"HTML (raw): {gist_info.raw_url}")
 
         if open_browser or open_by_default:
             open_output(out_html)
@@ -485,13 +529,55 @@ def json_cmd(
         meta_path.write_text(json.dumps(as_meta_dict(meta), indent=2, ensure_ascii=False) + "\n")
 
     if gist:
-        click.echo("Creating GitHub gist...")
-        gist_info = create_gist(out_html, public=gist_public)
+        click.echo("Publishing to GitHub Gist (HTML + rollout)...")
+        gist_info = create_gist(
+            out_html,
+            public=gist_public,
+            extra_files=[path],
+            description="Codex transcript (includes rollout for import)",
+        )
+        owner_login = gist_info.owner_login
+        if not owner_login:
+            parts = gist_info.gist_url.rstrip("/").split("/")
+            owner_login = parts[-2] if len(parts) >= 2 else None
+        if not owner_login:
+            raise click.ClickException("Failed to determine Gist owner for import URL.")
+
+        rollout_url = raw_gist_file_url(
+            owner_login=owner_login, gist_id=gist_info.gist_id, filename=path.name
+        )
+        import_cmd = (
+            "uvx --from git+https://github.com/prateek/codex-transcripts "
+            f"codex-transcripts import '{rollout_url}'"
+        )
+
+        # Re-render HTML with an import hint and update the gist.
+        out_html, meta, stats = generate_html_from_rollout(
+            path,
+            out_dir,
+            github_repo=repo,
+            include_json=include_source,
+            import_command=import_cmd,
+            import_rollout_url=rollout_url,
+        )
+        if meta is not None:
+            meta_path = out_html.parent / "session_meta.json"
+            meta_path.write_text(json.dumps(as_meta_dict(meta), indent=2, ensure_ascii=False) + "\n")
+
+        update_gist_file(gist_id=gist_info.gist_id, filename=out_html.name, content_file=out_html)
+        gist_info = get_gist_info(
+            gist_id=gist_info.gist_id, gist_url=gist_info.gist_url, html_filename=out_html.name
+        )
+
+        click.echo("Published to GitHub Gist:")
         click.echo(f"Gist: {gist_info.gist_url}")
         if gist_info.preview_url:
-            click.echo(f"Preview: {gist_info.preview_url}")
+            click.echo(f"Preview (HTML): {gist_info.preview_url}")
+        click.echo("Import on another machine:")
+        click.echo(import_cmd)
+        click.echo(f"Rollout (raw): {rollout_url}")
         if gist_info.raw_url:
-            click.echo(f"Raw: {gist_info.raw_url}")
+            click.echo(f"HTML (raw): {gist_info.raw_url}")
 
     if open_browser or open_by_default:
         open_output(out_html)

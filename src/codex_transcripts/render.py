@@ -534,6 +534,12 @@ h1 { font-size: 1.5rem; margin-bottom: 24px; padding-bottom: 8px; border-bottom:
 .system-records-notice details summary { cursor: pointer; font-size: 0.85rem; color: var(--system-border); }
 .system-records-notice-section { margin-top: 12px; }
 .system-records-notice-section-title { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.share-notice { background: var(--surface-bg); border: 1px solid var(--surface-border); border-left: 4px solid var(--user-border); border-radius: 12px; padding: 12px 16px; margin: 16px 0 24px 0; }
+.share-notice-title { font-weight: 600; color: var(--user-border); margin-bottom: 4px; }
+.share-notice-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+.share-notice-command { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; margin: 8px 0 8px 0; }
+.share-notice a { color: var(--user-border); text-decoration: none; }
+.share-notice a:hover { text-decoration: underline; }
 .message { margin-bottom: 16px; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px var(--shadow-color); background: var(--card-bg); }
 .message-header { padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); gap: 12px; }
 .role-label { font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.75rem; }

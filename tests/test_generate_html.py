@@ -82,3 +82,23 @@ def test_generate_html_includes_format_drift_warning_for_unknown_response_item_t
 
     assert "system-record" in index_html
     assert "response_item:mystery_item" in index_html
+
+
+def test_generate_html_can_include_import_command_hint(tmp_path: Path):
+    rollout = Path(__file__).parent / "sample_rollout.jsonl"
+    rollout_url = "https://example.com/rollout-2026-01-05T12-00-00-00000000-0000-0000-0000-000000000000.jsonl"
+    import_cmd = (
+        "uvx --from git+https://github.com/prateek/codex-transcripts "
+        f"codex-transcripts import {rollout_url}"
+    )
+
+    out_html, _meta, _stats = generate_html_from_rollout(
+        rollout,
+        tmp_path / "out",
+        import_command=import_cmd,
+        import_rollout_url=rollout_url,
+    )
+    index_html = out_html.read_text(encoding="utf-8")
+    assert "Import this session on another machine" in index_html
+    assert "uvx --from git+https://github.com/prateek/codex-transcripts" in index_html
+    assert rollout_url in index_html
